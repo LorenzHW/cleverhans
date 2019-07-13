@@ -6,7 +6,7 @@ from easydict import EasyDict
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Dense, Flatten, Conv2D
 
-from cleverhans.future.tf2.attacks import projected_gradient_descent, fast_gradient_method
+from cleverhans.future.tf2.attacks import projected_gradient_descent, spsa
 
 FLAGS = flags.FLAGS
 
@@ -38,7 +38,7 @@ def ld_mnist():
                             as_supervised=True)
   mnist_train, mnist_test = dataset['train'], dataset['test']
   mnist_train = mnist_train.map(convert_types).shuffle(10000).batch(128)
-  mnist_test = mnist_test.map(convert_types).batch(128)
+  mnist_test = mnist_test.map(convert_types).batch(1).take(100)
   return EasyDict(train=mnist_train, test=mnist_test)
 
 
@@ -81,13 +81,14 @@ def main(_):
     y_pred = model(x)
     test_acc_clean(y, y_pred)
 
-    x_fgm = fast_gradient_method(model, x, FLAGS.eps, np.inf)
+    x_fgm = spsa(model, x, y, FLAGS.eps, nb_iter=100, early_stop_loss_threshold=-1., clip_min=0.,
+                 clip_max=1.)
     y_pred_fgm = model(x_fgm)
     test_acc_fgsm(y, y_pred_fgm)
 
-    x_pgd = projected_gradient_descent(model, x, FLAGS.eps, 0.01, 40, np.inf)
-    y_pred_pgd = model(x_pgd)
-    test_acc_pgd(y, y_pred_pgd)
+    # x_pgd = projected_gradient_descent(model, x, FLAGS.eps, 0.01, 40, np.inf)
+    # y_pred_pgd = model(x_pgd)
+    # test_acc_pgd(y, y_pred_pgd)
 
     progress_bar_test.add(x.shape[0])
 
@@ -97,7 +98,7 @@ def main(_):
 
 
 if __name__ == '__main__':
-  flags.DEFINE_integer('nb_epochs', 8, 'Number of epochs.')
+  flags.DEFINE_integer('nb_epochs', 1, 'Number of epochs.')
   flags.DEFINE_float('eps', 0.3, 'Total epsilon for FGM and PGD attacks.')
   flags.DEFINE_bool('adv_train', False, 'Use adversarial training (on PGD adversarial examples).')
   app.run(main)
